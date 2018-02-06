@@ -1,7 +1,11 @@
 Option Explicit
 
+
 Const g_max_level As Integer = 5
+
+
 Dim g_level_number(g_max_level) As Integer
+
 
 Const g_level1_format As Integer = 0
 Const g_level2_format As Integer = 2
@@ -17,24 +21,33 @@ Const g_task_start_line As Integer = 6
 Dim g_task_end_line As Integer
 
 Dim g_date_end_col As Integer
+Const g_PrivateTask_col As Integer = 15
+Const g_task_col As Integer = 3
+
 
 Sub test()
-    MsgBox DateAdd("m", 6, Cells(g_start_day_x, g_start_day_y).Value)
+
 End Sub
 
+Function GetGanttMinDate() As Date
+    GetGanttMinDate = Cells(g_start_day_x, g_start_day_y).Value
+End Function
+
+Function GetGanttMaxDate() As Date
+    GetGanttMaxDate = DateAdd("m", 6, Cells(g_start_day_x, g_start_day_y).Value)
+End Function
 
 Sub getTaskArea()
     Dim line As Integer
     Dim col As Integer
 
     line = g_task_start_line
-    Do While Cells(line, 3).Value <> ""
+    Do While Cells(line, g_task_col).Value <> ""
         line = line + 1
     Loop
-    g_task_end_line = line
+    g_task_end_line = line - 1
     
-    
-    g_date_end_col = g_ganttchart_start_col + DateAdd("m", 6, Cells(g_start_day_x, g_start_day_y).Value) - Cells(g_start_day_x, g_start_day_y).Value
+    g_date_end_col = g_ganttchart_start_col + GetGanttMaxDate() - GetGanttMinDate()
     
     For col = g_start_day_y + 1 To g_date_end_col
         Cells(g_start_day_x + 1, col).Value = Cells(g_start_day_x + 1, col - 1).Value + 1
@@ -57,9 +70,9 @@ Sub UpdateGanttChart()
         formatLevel (line)
         drawGanttChart (line)
     Next
-    g_task_end_line = line
     
     Call drawCurrentDayLine
+    Call updatePrivateTasks
     Application.ScreenUpdating = True
     
 End Sub
@@ -153,6 +166,12 @@ Sub drawGanttChart(line As Integer)
         Exit Sub
     End If
     
+    If Not ((Cells(line, 8).Value >= GetGanttMinDate() And Cells(line, 8).Value <= GetGanttMaxDate()) _
+        And (Cells(line, 7).Value >= GetGanttMinDate() And Cells(line, 7).Value <= GetGanttMaxDate())) Then
+        Exit Sub
+    End If
+    
+    
     base = Cells(g_start_day_x, g_start_day_y).Value
     date_len = Cells(line, 8).Value - Cells(line, 7).Value
     offset = Cells(line, 7).Value - base
@@ -181,6 +200,9 @@ Sub drawCurrentDayLine()
     Dim base As Variant
     Dim i As Integer
     
+    If Not (Now() >= GetGanttMinDate() And Now <= GetGanttMaxDate()) Then
+        Exit Sub
+    End If
     base = Cells(g_start_day_x, g_start_day_y).Value
     offset = Now() - base
 
@@ -210,9 +232,10 @@ End Sub
 Sub clearGanttChart()
 
     Range("D2").Select
-    
     Selection.Copy
-    Range("R6:FR40").Select
+    
+    Range(Cells(g_task_start_line, g_ganttchart_start_col), Cells(g_task_end_line, g_date_end_col)).Select
+    
     Selection.PasteSpecial Paste:=xlPasteFormats, Operation:=xlNone, _
         SkipBlanks:=False, Transpose:=False
         
@@ -231,3 +254,32 @@ End Function
 Function isWorkDay(cur_date As Date) As Boolean
 
 End Function
+
+Sub updatePrivateTasks()
+    Dim line As Integer
+    Dim str1 As String
+    
+'    For line = g_task_start_line To g_task_end_line
+'        str1 = str1 & Cells(line, g_task_col).Value & ","
+'    Next
+
+    Range(Cells(g_task_start_line, g_PrivateTask_col), Cells(g_task_end_line, g_PrivateTask_col)).Select
+    With Selection.Validation
+        .Delete
+        .Add Type:=xlValidateList, AlertStyle:=xlValidAlertStop, Operator:= _
+        xlBetween, Formula1:="=$C$6:$C$35"
+        .IgnoreBlank = True
+        .InCellDropdown = True
+        .InputTitle = ""
+        .ErrorTitle = ""
+        .InputMessage = ""
+        .ErrorMessage = ""
+        .IMEMode = xlIMEModeNoControl
+        .ShowInput = True
+        .ShowError = True
+    End With
+    
+    Debug.Print "updatePrivateTasks() end"
+End Sub
+
+
