@@ -21,19 +21,25 @@ Const g_task_area_start_line As Integer = 6
 Const g_task_area_start_col As Integer = 2
 Dim g_task_area_end_line As Integer
 Const g_task_area_end_col As Integer = 19
+
 Const g_task_name_col As Integer = 3
+Const g_task_days_col As Integer = 6
 Const g_task_start_day_col As Integer = 7
 Const g_task_end_day_col As Integer = 8
 Const g_task_process_col As Integer = 14
+Const g_PrivateTask_col As Integer = 15
+Const g_task_baseline_start_day_col As Integer = 16
+Const g_task_baseline_end_day_col As Integer = 17
 Const g_task_type_col As Integer = 18
 Const g_task_level_col As Integer = 19
 
 Dim g_date_end_col As Integer
-Const g_PrivateTask_col As Integer = 15
-Const g_task_col As Integer = 3
 
 Dim g_current_selection_row As Integer
 Dim g_current_selection_col As Integer
+
+Const g_GanttChartParentTaskColor As Single = -65536
+
 Sub SaveCurrentSelectionPos()
     g_current_selection_row = Selection.Row
     g_current_selection_col = Selection.Column
@@ -60,7 +66,7 @@ Sub getTaskArea()
     Dim col As Integer
 
     line = g_task_area_start_line
-    Do While Cells(line, g_task_col).Value <> ""
+    Do While Cells(line, g_task_name_col).Value <> ""
         line = line + 1
     Loop
     g_task_area_end_line = line - 1
@@ -90,12 +96,18 @@ Sub UpdateGanttChart()
     
     For line = g_task_area_start_line To g_task_area_end_line
         formatLevel (line)
-        drawGanttChart (line)
     Next
     
     Call updateParentTaskDate
+
+    For line = g_task_area_start_line To g_task_area_end_line
+        drawGanttChart (line)
+    Next
+
     Call drawCurrentDayLine
     Call updatePrivateTasks
+
+    Call setBaseLineDate
 
     Call UpdateCurrentSelectionPos
     Application.ScreenUpdating = True
@@ -212,29 +224,64 @@ Sub drawGanttChart(line As Integer)
     date_len = Cells(line, g_task_end_day_col).Value - Cells(line, g_task_start_day_col).Value
     offset = Cells(line, g_task_start_day_col).Value - base
     
-    If Cells(line, g_task_process_col).Value = 1 Then
-        Range("F2").Select
-    ElseIf Cells(line, g_task_process_col).Value > 0 Then
-        Range("J2").Select
-    Else
-        Range("H2").Select
+    If Cells(line, g_task_type_col).Value = "T" Then
+        If Cells(line, g_task_process_col).Value = 1 Then
+            Range("F2").Select
+        ElseIf Cells(line, g_task_process_col).Value > 0 Then
+            Range("J2").Select
+        Else
+            Range("H2").Select
+        End If
+        Selection.Copy
+        
+        For i = 0 To date_len
+            Cells(line, g_ganttchart_start_col + offset + i).PasteSpecial Paste:=xlPasteFormats, Operation:=xlNone, _
+                                                      SkipBlanks:=False, Transpose:=False
+        Next
+        
+        Range(Cells(line, g_ganttchart_start_col + offset), Cells(line, g_ganttchart_start_col + offset + date_len)).Select
+        Selection.Merge
+        ActiveCell.FormulaR1C1 = Cells(line, g_task_process_col).Value
+        With Selection
+            .HorizontalAlignment = xlCenter
+            .VerticalAlignment = xlCenter
+            .Style = "Percent"
+        End With
+        Selection.Font.Bold = True
+        
+        Cells(line, g_ganttchart_start_col + offset + date_len + 1).Value = Strings.Split(LTrim(Cells(line, g_task_name_col).Value), " ")(1)
+        
+    ElseIf Cells(line, g_task_type_col).Value = "P" Then
+    
+        Range(Cells(line, g_ganttchart_start_col + offset), Cells(line, g_ganttchart_start_col + offset + date_len)).Select
+
+        With Selection.Borders(xlEdgeLeft)
+            .LineStyle = xlContinuous
+            .Color = g_GanttChartParentTaskColor
+            .TintAndShade = 0
+            .Weight = xlMedium
+        End With
+
+        With Selection.Borders(xlEdgeTop)
+            .LineStyle = xlContinuous
+            .Color = g_GanttChartParentTaskColor
+            .TintAndShade = 0
+            .Weight = xlMedium
+        End With
+
+        With Selection.Borders(xlEdgeRight)
+            .LineStyle = xlContinuous
+            .Color = g_GanttChartParentTaskColor
+            .TintAndShade = 0
+            .Weight = xlMedium
+        End With
+        
+        Selection.Font.Bold = True
+        Selection.Font.Color = g_GanttChartParentTaskColor
+
+        Cells(line, g_ganttchart_start_col + offset).Value = Strings.Split(LTrim(Cells(line, g_task_name_col).Value), " ")(1)
+
     End If
-    Selection.Copy
-    
-    For i = 0 To date_len
-        Cells(line, g_ganttchart_start_col + offset + i).PasteSpecial Paste:=xlPasteFormats, Operation:=xlNone, _
-                                                  SkipBlanks:=False, Transpose:=False
-    Next
-    
-    Range(Cells(line, g_ganttchart_start_col + offset), Cells(line, g_ganttchart_start_col + offset + date_len)).Select
-    Selection.Merge
-    ActiveCell.FormulaR1C1 = Cells(line, g_task_process_col).Value
-    With Selection
-        .HorizontalAlignment = xlCenter
-        .VerticalAlignment = xlCenter
-        .Style = "Percent"
-    End With
-    
     Application.CutCopyMode = False
     
 End Sub
@@ -276,6 +323,8 @@ Sub drawCurrentDayLine()
 End Sub
 
 Sub clearGanttChart()
+    Dim col As Integer
+
     Range(Cells(g_task_area_start_line, g_ganttchart_start_col), Cells(g_task_area_end_line, g_date_end_col)).Select
     Selection.ClearContents
     Selection.Merge
@@ -286,7 +335,28 @@ Sub clearGanttChart()
     Range(Cells(g_task_area_start_line, g_ganttchart_start_col), Cells(g_task_area_end_line, g_date_end_col)).Select
     Selection.PasteSpecial Paste:=xlPasteFormats, Operation:=xlNone, _
         SkipBlanks:=False, Transpose:=False
-        
+    
+    For col = g_ganttchart_start_col To g_ganttchart_start_col + 7
+        If Cells(g_task_area_start_line - 1, col).Value = "Áù" Then
+            Exit For
+        End If
+    Next
+    
+    For col = col To g_date_end_col Step 7
+        Range("L2").Select
+        Selection.Copy
+        Range(Cells(g_task_area_start_line, col), Cells(g_task_area_end_line, col)).Select
+        Selection.PasteSpecial Paste:=xlPasteFormats, Operation:=xlNone, _
+            SkipBlanks:=False, Transpose:=False
+
+        Range("N2").Select
+        Selection.Copy
+        Range(Cells(g_task_area_start_line, col + 1), Cells(g_task_area_end_line, col + 1)).Select
+        Selection.PasteSpecial Paste:=xlPasteFormats, Operation:=xlNone, _
+            SkipBlanks:=False, Transpose:=False
+
+    Next
+
     Application.CutCopyMode = False
     
 End Sub
@@ -308,7 +378,7 @@ Sub updatePrivateTasks()
     Dim str1 As String
     
 '    For line = g_task_area_start_line To g_task_area_end_line
-'        str1 = str1 & Cells(line, g_task_col).Value & ","
+'        str1 = str1 & Cells(line, g_task_name_col).Value & ","
 '    Next
 
     Range(Cells(g_task_area_start_line, g_PrivateTask_col), Cells(g_task_area_end_line, g_PrivateTask_col)).Select
@@ -341,38 +411,57 @@ End Sub
 
 Sub updateParentTaskDate()
     Dim line As Integer
+    Dim task_level As Integer
 
     Call clearTaskDate(0)
+
     For line = g_task_area_end_line To g_task_area_start_line Step -1
+        task_level = Cells(line, g_task_level_col).Value
         If (Cells(line, g_task_type_col).Value = "T") And (IsError(Range("G" & line)) = False) Then
-            If (g_task_startday_min(Cells(line, g_task_level_col).Value) = g_task_default_date) Or _
-               (g_task_startday_min(Cells(line, g_task_level_col).Value) > Cells(line, g_task_start_day_col).Value) Then
-                g_task_startday_min(Cells(line, g_task_level_col).Value) = Cells(line, g_task_start_day_col).Value
+            If (g_task_startday_min(task_level) = g_task_default_date) Or _
+               (g_task_startday_min(task_level) > Cells(line, g_task_start_day_col).Value) Then
+                g_task_startday_min(task_level) = Cells(line, g_task_start_day_col).Value
             End If
             
-            If (g_task_endday_max(Cells(line, g_task_level_col).Value) = g_task_default_date) Or _
-               (g_task_endday_max(Cells(line, g_task_level_col).Value) < Cells(line, g_task_end_day_col).Value) Then
-                g_task_endday_max(Cells(line, g_task_level_col).Value) = Cells(line, g_task_end_day_col).Value
+            If (g_task_endday_max(task_level) = g_task_default_date) Or _
+               (g_task_endday_max(task_level) < Cells(line, g_task_end_day_col).Value) Then
+                g_task_endday_max(task_level) = Cells(line, g_task_end_day_col).Value
             End If
             
         ElseIf Cells(line, g_task_type_col).Value = "P" Then
-            If (g_task_startday_min(Cells(line, g_task_level_col).Value + 1) <> g_task_default_date) Then
-                Cells(line, g_task_start_day_col).Value = g_task_startday_min(Cells(line, g_task_level_col).Value + 1)
-                Cells(line, g_task_end_day_col).Value = g_task_endday_max(Cells(line, g_task_level_col).Value + 1)
+            If (g_task_startday_min(task_level + 1) <> g_task_default_date) Then
+                Cells(line, g_task_start_day_col).Value = g_task_startday_min(task_level + 1)
+                Cells(line, g_task_end_day_col).Value = g_task_endday_max(task_level + 1)
 
-                If (g_task_startday_min(Cells(line, g_task_level_col).Value) = g_task_default_date) Or _
-                   (g_task_startday_min(Cells(line, g_task_level_col).Value) > Cells(line, g_task_start_day_col).Value) Then
-                    g_task_startday_min(Cells(line, g_task_level_col).Value) = Cells(line, g_task_start_day_col).Value
+                If (g_task_startday_min(task_level) = g_task_default_date) Or _
+                   (g_task_startday_min(task_level) > Cells(line, g_task_start_day_col).Value) Then
+                    g_task_startday_min(task_level) = Cells(line, g_task_start_day_col).Value
                 End If
                 
-                If (g_task_endday_max(Cells(line, g_task_level_col).Value) = g_task_default_date) Or _
-                   (g_task_endday_max(Cells(line, g_task_level_col).Value) < Cells(line, g_task_end_day_col).Value) Then
-                    g_task_endday_max(Cells(line, g_task_level_col).Value) = Cells(line, g_task_end_day_col).Value
+                If (g_task_endday_max(task_level) = g_task_default_date) Or _
+                   (g_task_endday_max(task_level) < Cells(line, g_task_end_day_col).Value) Then
+                    g_task_endday_max(task_level) = Cells(line, g_task_end_day_col).Value
                 End If
 
-                Call clearTaskDate(Cells(line, g_task_level_col).Value + 1)
+                Cells(line, g_task_days_col).Value = Cells(line, g_task_end_day_col).Value - Cells(line, g_task_start_day_col).Value
+                
+                Call clearTaskDate(task_level + 1)
             End If
+
         End If
+        
     Next
 End Sub
+
+Sub setBaseLineDate()
+    Dim line As Integer
+
+    For line = g_task_area_start_line To g_task_area_end_line
+        Cells(line, g_task_baseline_start_day_col).Value = Cells(line, g_task_start_day_col).Value
+        Cells(line, g_task_baseline_end_day_col).Value = Cells(line, g_task_end_day_col).Value
+    Next
+
+End Sub
+
+
 
