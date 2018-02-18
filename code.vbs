@@ -3,9 +3,12 @@ Option Explicit
 Const g_max_level As Integer = 5
 
 Dim g_level_number(g_max_level) As Integer
+
 Dim g_task_startday_min(g_max_level) As Date
 Dim g_task_endday_max(g_max_level) As Date
 Const g_task_default_date As Date = #12/31/9999#
+
+Dim g_task_actday(g_max_level) As Single
 
 Const g_level1_format As Integer = 0
 Const g_level2_format As Integer = 4
@@ -50,7 +53,7 @@ Sub UpdateCurrentSelectionPos()
 End Sub
 
 Sub test()
-    Range("I32:K32").Value = 30
+    MsgBox Cells(24, 14).Text
 End Sub
 
 Function GetGanttMinDate() As Date
@@ -98,7 +101,7 @@ Sub UpdateGanttChart()
         formatLevel (line)
     Next
     
-    Call updateParentTaskDate
+    Call updateTaskInfo
 
     For line = g_task_area_start_line To g_task_area_end_line
         drawGanttChart (line)
@@ -279,7 +282,9 @@ Sub drawGanttChart(line As Integer)
         Selection.Font.Bold = True
         Selection.Font.Color = g_GanttChartParentTaskColor
 
-        Cells(line, g_ganttchart_start_col + offset).Value = Strings.Split(LTrim(Cells(line, g_task_name_col).Value), " ")(1)
+        Cells(line, g_ganttchart_start_col + offset).Value = _
+                Strings.Split(LTrim(Cells(line, g_task_name_col).Value), " ")(1) _
+                & "(" & Cells(line, g_task_process_col).Text & ")"
 
     End If
     Application.CutCopyMode = False
@@ -337,7 +342,7 @@ Sub clearGanttChart()
         SkipBlanks:=False, Transpose:=False
     
     For col = g_ganttchart_start_col To g_ganttchart_start_col + 7
-        If Cells(g_task_area_start_line - 1, col).Value = "Áù" Then
+        If Cells(g_task_area_start_line - 1, col).Value = "ï¾ãƒ» Then
             Exit For
         End If
     Next
@@ -409,7 +414,64 @@ Sub clearTaskDate(index As Integer)
     Next
 End Sub
 
-Sub updateParentTaskDate()
+Sub clearTaskActDay(index As Integer)
+    Dim i As Integer
+    For i = index To g_max_level
+        g_task_actday(i) = 0
+    Next
+End Sub
+
+Sub updateParentTaskProcess(line As Integer, task_level As Integer, is_parent As Boolean)
+    If is_parent = False Then
+        g_task_actday(task_level) = g_task_actday(task_level) + (Cells(line, g_task_days_col).Value * Cells(line, g_task_process_col).Value)
+    ElseIf is_parent = True Then
+        Cells(line, g_task_process_col).Value = g_task_actday(task_level + 1) / Cells(line, g_task_days_col).Value
+        
+        g_task_actday(task_level) = g_task_actday(task_level) + Cells(line, g_task_process_col).Value
+        
+        Call clearTaskActDay(task_level + 1)
+    End If
+End Sub
+
+Sub updateParentTaskDate(line As Integer, task_level As Integer, is_parent As Boolean)
+    If is_parent = False Then
+        'update task start date
+        If (g_task_startday_min(task_level) = g_task_default_date) Or _
+            (g_task_startday_min(task_level) > Cells(line, g_task_start_day_col).Value) Then
+            g_task_startday_min(task_level) = Cells(line, g_task_start_day_col).Value
+        End If
+        
+        'update task end date
+        If (g_task_endday_max(task_level) = g_task_default_date) Or _
+            (g_task_endday_max(task_level) < Cells(line, g_task_end_day_col).Value) Then
+            g_task_endday_max(task_level) = Cells(line, g_task_end_day_col).Value
+        End If
+        
+    ElseIf is_parent = True Then
+        If (g_task_startday_min(task_level + 1) <> g_task_default_date) Then
+            Cells(line, g_task_start_day_col).Value = g_task_startday_min(task_level + 1)
+            Cells(line, g_task_end_day_col).Value = g_task_endday_max(task_level + 1)
+
+            If (g_task_startday_min(task_level) = g_task_default_date) Or _
+                (g_task_startday_min(task_level) > Cells(line, g_task_start_day_col).Value) Then
+                g_task_startday_min(task_level) = Cells(line, g_task_start_day_col).Value
+            End If
+            
+            If (g_task_endday_max(task_level) = g_task_default_date) Or _
+                (g_task_endday_max(task_level) < Cells(line, g_task_end_day_col).Value) Then
+                g_task_endday_max(task_level) = Cells(line, g_task_end_day_col).Value
+            End If
+
+            Cells(line, g_task_days_col).Value = Cells(line, g_task_end_day_col).Value - Cells(line, g_task_start_day_col).Value + 1
+            
+            Call clearTaskDate(task_level + 1)
+        End If
+
+    End If
+
+End Sub
+
+Sub updateTaskInfo()
     Dim line As Integer
     Dim task_level As Integer
 
@@ -417,40 +479,17 @@ Sub updateParentTaskDate()
 
     For line = g_task_area_end_line To g_task_area_start_line Step -1
         task_level = Cells(line, g_task_level_col).Value
-        If (Cells(line, g_task_type_col).Value = "T") And (IsError(Range("G" & line)) = False) Then
-            If (g_task_startday_min(task_level) = g_task_default_date) Or _
-               (g_task_startday_min(task_level) > Cells(line, g_task_start_day_col).Value) Then
-                g_task_startday_min(task_level) = Cells(line, g_task_start_day_col).Value
-            End If
-            
-            If (g_task_endday_max(task_level) = g_task_default_date) Or _
-               (g_task_endday_max(task_level) < Cells(line, g_task_end_day_col).Value) Then
-                g_task_endday_max(task_level) = Cells(line, g_task_end_day_col).Value
-            End If
-            
-        ElseIf Cells(line, g_task_type_col).Value = "P" Then
-            If (g_task_startday_min(task_level + 1) <> g_task_default_date) Then
-                Cells(line, g_task_start_day_col).Value = g_task_startday_min(task_level + 1)
-                Cells(line, g_task_end_day_col).Value = g_task_endday_max(task_level + 1)
-
-                If (g_task_startday_min(task_level) = g_task_default_date) Or _
-                   (g_task_startday_min(task_level) > Cells(line, g_task_start_day_col).Value) Then
-                    g_task_startday_min(task_level) = Cells(line, g_task_start_day_col).Value
-                End If
-                
-                If (g_task_endday_max(task_level) = g_task_default_date) Or _
-                   (g_task_endday_max(task_level) < Cells(line, g_task_end_day_col).Value) Then
-                    g_task_endday_max(task_level) = Cells(line, g_task_end_day_col).Value
-                End If
-
-                Cells(line, g_task_days_col).Value = Cells(line, g_task_end_day_col).Value - Cells(line, g_task_start_day_col).Value
-                
-                Call clearTaskDate(task_level + 1)
-            End If
-
-        End If
         
+        If (Cells(line, g_task_type_col).Value = "T") And (IsError(Range("G" & line)) = False) Then
+            Call updateParentTaskDate(line, task_level, False)
+            Call updateParentTaskProcess(line, task_level, False)
+        ElseIf Cells(line, g_task_type_col).Value = "P" Then
+            Call updateParentTaskDate(line, task_level, True)
+            Call updateParentTaskProcess(line, task_level, True)
+        End If
+
     Next
+
 End Sub
 
 Sub setBaseLineDate()
@@ -462,6 +501,12 @@ Sub setBaseLineDate()
     Next
 
 End Sub
+
+
+
+
+
+
 
 
 
