@@ -9,6 +9,7 @@ Dim g_task_endday_max(g_max_level) As Date
 Const g_task_default_date As Date = #12/31/9999#
 
 Dim g_task_actday(g_max_level) As Single
+Dim g_task_planday(g_max_level) As Single
 
 Const g_level1_format As Integer = 0
 Const g_level2_format As Integer = 4
@@ -17,13 +18,13 @@ Const g_level4_format As Integer = 12
 Const g_level5_format As Integer = 16
 
 Const g_start_day_x As Integer = 3
-Const g_start_day_y As Integer = 20
-Const g_ganttchart_start_col As Integer = 20
+Const g_start_day_y As Integer = 26
+Const g_ganttchart_start_col As Integer = 26
 
 Const g_task_area_start_line As Integer = 6
 Const g_task_area_start_col As Integer = 2
 Dim g_task_area_end_line As Integer
-Const g_task_area_end_col As Integer = 19
+Const g_task_area_end_col As Integer = 25
 
 Const g_task_name_col As Integer = 3
 Const g_task_days_col As Integer = 6
@@ -33,8 +34,8 @@ Const g_task_process_col As Integer = 14
 Const g_PrivateTask_col As Integer = 15
 Const g_task_baseline_start_day_col As Integer = 16
 Const g_task_baseline_end_day_col As Integer = 17
-Const g_task_type_col As Integer = 18
-Const g_task_level_col As Integer = 19
+Const g_task_type_col As Integer = 24
+Const g_task_level_col As Integer = 25
 
 Dim g_date_end_col As Integer
 
@@ -342,7 +343,7 @@ Sub clearGanttChart()
         SkipBlanks:=False, Transpose:=False
     
     For col = g_ganttchart_start_col To g_ganttchart_start_col + 7
-        If Cells(g_task_area_start_line - 1, col).Value = "ﾁ・ Then
+        If Cells(g_task_area_start_line - 1, col).Value = "六" Then
             Exit For
         End If
     Next
@@ -421,13 +422,20 @@ Sub clearTaskActDay(index As Integer)
     Next
 End Sub
 
+Sub clearTaskPlanDay(index As Integer)
+    Dim i As Integer
+    For i = index To g_max_level
+        g_task_planday(i) = 0
+    Next
+End Sub
+
 Sub updateParentTaskProcess(line As Integer, task_level As Integer, is_parent As Boolean)
     If is_parent = False Then
         g_task_actday(task_level) = g_task_actday(task_level) + (Cells(line, g_task_days_col).Value * Cells(line, g_task_process_col).Value)
     ElseIf is_parent = True Then
         Cells(line, g_task_process_col).Value = g_task_actday(task_level + 1) / Cells(line, g_task_days_col).Value
         
-        g_task_actday(task_level) = g_task_actday(task_level) + Cells(line, g_task_process_col).Value
+        g_task_actday(task_level) = g_task_actday(task_level) + g_task_actday(task_level + 1)
         
         Call clearTaskActDay(task_level + 1)
     End If
@@ -446,6 +454,8 @@ Sub updateParentTaskDate(line As Integer, task_level As Integer, is_parent As Bo
             (g_task_endday_max(task_level) < Cells(line, g_task_end_day_col).Value) Then
             g_task_endday_max(task_level) = Cells(line, g_task_end_day_col).Value
         End If
+
+        g_task_planday(task_level) = g_task_planday(task_level) + Cells(line, g_task_days_col).Value
         
     ElseIf is_parent = True Then
         If (g_task_startday_min(task_level + 1) <> g_task_default_date) Then
@@ -462,9 +472,11 @@ Sub updateParentTaskDate(line As Integer, task_level As Integer, is_parent As Bo
                 g_task_endday_max(task_level) = Cells(line, g_task_end_day_col).Value
             End If
 
-            Cells(line, g_task_days_col).Value = Cells(line, g_task_end_day_col).Value - Cells(line, g_task_start_day_col).Value + 1
+            Cells(line, g_task_days_col).Value = g_task_planday(task_level + 1)
+            g_task_planday(task_level) = g_task_planday(task_level) + Cells(line, g_task_days_col).Value
             
             Call clearTaskDate(task_level + 1)
+            Call clearTaskPlanDay(task_level + 1)
         End If
 
     End If
@@ -481,11 +493,15 @@ Sub updateTaskInfo()
         task_level = Cells(line, g_task_level_col).Value
         
         If (Cells(line, g_task_type_col).Value = "T") And (IsError(Range("G" & line)) = False) Then
+        
             Call updateParentTaskDate(line, task_level, False)
             Call updateParentTaskProcess(line, task_level, False)
+            
         ElseIf Cells(line, g_task_type_col).Value = "P" Then
+        
             Call updateParentTaskDate(line, task_level, True)
             Call updateParentTaskProcess(line, task_level, True)
+            
         End If
 
     Next
