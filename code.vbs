@@ -27,6 +27,8 @@ Dim g_task_area_end_line As Integer
 Const g_task_area_end_col As Integer = 25
 
 Const g_task_name_col As Integer = 3
+Const g_task_res_col As Integer = 4
+Const g_task_res_persent_col As Integer = 5
 Const g_task_days_col As Integer = 6
 Const g_task_start_day_col As Integer = 7
 Const g_task_end_day_col As Integer = 8
@@ -42,54 +44,37 @@ Dim g_date_end_col As Integer
 Dim g_current_selection_row As Integer
 Dim g_current_selection_col As Integer
 
+Const g_task_day_len As Integer = 6 'month
+Dim g_task_start_month As Integer
+Dim g_task_end_month As Integer
+
 Const g_GanttChartParentTaskColor As Single = -65536
 
-Sub SaveCurrentSelectionPos()
-    g_current_selection_row = Selection.Row
-    g_current_selection_col = Selection.Column
-End Sub
-
-Sub UpdateCurrentSelectionPos()
-    Range(Cells(g_current_selection_row, g_current_selection_col), Cells(g_current_selection_row, g_current_selection_col)).Select
-End Sub
-
-Sub test()
-    MsgBox Cells(24, 14).Text
-End Sub
-
-Function GetGanttMinDate() As Date
-    GetGanttMinDate = Cells(g_start_day_x, g_start_day_y).Value
-End Function
-
-Function GetGanttMaxDate() As Date
-    GetGanttMaxDate = DateAdd("m", 6, Cells(g_start_day_x, g_start_day_y).Value)
-End Function
-
-Sub getTaskArea()
-    Dim line As Integer
-    Dim col As Integer
-
-    line = g_task_area_start_line
-    Do While Cells(line, g_task_name_col).Value <> ""
-        line = line + 1
-    Loop
-    g_task_area_end_line = line - 1
+'================================================
+'public functions
+'================================================
+Public Function CalcWorkDate(ByVal cur_date As Date, day As Integer) As Date
+    Dim i As Integer
+    Dim last_date As Date
     
-    g_date_end_col = g_ganttchart_start_col + GetGanttMaxDate() - GetGanttMinDate()
-    
-    For col = g_start_day_y + 1 To g_date_end_col
-        Cells(g_start_day_x + 1, col).Value = Cells(g_start_day_x + 1, col - 1).Value + 1
+    last_date = cur_date
+    For i = 1 To day - 1
+        last_date = getNextWorkDate(last_date)
     Next
     
-End Sub
+    CalcWorkDate = last_date
+    
+End Function
 
-Sub UpdateGanttChart()
+Public Sub UpdateGanttChart()
     Dim line As Integer
     Dim level As Integer
     
+    Worksheets("WBS").Activate
+    
     Call SaveCurrentSelectionPos
     Application.ScreenUpdating = False
-    
+        
     Call getTaskArea
   
     Call clearLevelNumber
@@ -117,6 +102,56 @@ Sub UpdateGanttChart()
     Application.ScreenUpdating = True
     
 End Sub
+
+Public Sub ClearChargeInfo()
+    Worksheets("Resource").Range(Cells(5, 4), Cells(8, 9)).Select
+    Selection.ClearContents
+End Sub
+
+'================================================
+'private functions
+'================================================
+
+Sub SaveCurrentSelectionPos()
+    g_current_selection_row = Selection.Row
+    g_current_selection_col = Selection.Column
+End Sub
+
+Sub UpdateCurrentSelectionPos()
+    Range(Cells(g_current_selection_row, g_current_selection_col), Cells(g_current_selection_row, g_current_selection_col)).Select
+End Sub
+
+
+Function GetGanttMinDate() As Date
+    GetGanttMinDate = Cells(g_start_day_x, g_start_day_y).Value
+End Function
+
+Function GetGanttMaxDate() As Date
+    GetGanttMaxDate = DateAdd("m", g_task_day_len, Cells(g_start_day_x, g_start_day_y).Value)
+End Function
+
+Sub getTaskArea()
+    Dim line As Integer
+    Dim col As Integer
+
+    g_task_start_month = Month(Cells(g_start_day_x, g_start_day_y).Value)
+    g_task_end_month = Month(DateAdd("m", g_task_day_len, Cells(g_start_day_x, g_start_day_y).Value))
+    
+    line = g_task_area_start_line
+    Do While Cells(line, g_task_name_col).Value <> ""
+        line = line + 1
+    Loop
+    g_task_area_end_line = line - 1
+    
+    g_date_end_col = g_ganttchart_start_col + GetGanttMaxDate() - GetGanttMinDate()
+    
+    For col = g_start_day_y + 1 To g_date_end_col
+        Cells(g_start_day_x + 1, col).Value = Cells(g_start_day_x + 1, col - 1).Value + 1
+    Next
+    
+End Sub
+
+
 
 Sub formatLevel(line As Integer)
     Dim level As Integer
@@ -343,7 +378,7 @@ Sub clearGanttChart()
         SkipBlanks:=False, Transpose:=False
     
     For col = g_ganttchart_start_col To g_ganttchart_start_col + 7
-        If Cells(g_task_area_start_line - 1, col).Value = "六" Then
+        If Cells(g_task_area_start_line - 1, col).Value = "?" Then
             Exit For
         End If
     Next
@@ -367,17 +402,15 @@ Sub clearGanttChart()
     
 End Sub
 
-Function CalcWorkDate(cur_date As Date, day As Integer) As Date
+Sub test()
 
-End Function
+    g_task_start_month = Month(Cells(g_start_day_x, g_start_day_y).Value)
+    g_task_end_month = Month(DateAdd("m", g_task_day_len, Cells(g_start_day_x, g_start_day_y).Value))
+    MsgBox g_task_start_month & "/" & g_task_end_month & "/" & DateAdd("m", g_task_day_len, Cells(g_start_day_x, g_start_day_y).Value)
+    
+End Sub
 
-Function getNextWorkDate(cur_date As Date) As Date
 
-End Function
-
-Function isWorkDay(cur_date As Date) As Boolean
-
-End Function
 
 Sub updatePrivateTasks()
     Dim line As Integer
@@ -496,6 +529,7 @@ Sub updateTaskInfo()
         
             Call updateParentTaskDate(line, task_level, False)
             Call updateParentTaskProcess(line, task_level, False)
+            Call UpdateChargeInfo(line, task_level, False)
             
         ElseIf Cells(line, g_task_type_col).Value = "P" Then
         
@@ -518,10 +552,65 @@ Sub setBaseLineDate()
 
 End Sub
 
+Function getNextWorkDate(ByVal cur_date As Date) As Date
+    Do
+        cur_date = cur_date + 1
+    Loop Until isWorkDay(cur_date)
+    
+    getNextWorkDate = cur_date
+    
+End Function
+
+Function isWorkDay(cur_date As Date) As Boolean
+    If (Weekday(cur_date, vbMonday) > 5) Then
+         If Application.WorksheetFunction.CountIf(Worksheets("Data").[D4:D20], cur_date) > 0 Then
+            isWorkDay = True
+         Else
+            isWorkDay = False
+        End If
+    ElseIf Application.WorksheetFunction.CountIf(Worksheets("Data").[C4:C20], cur_date) > 0 Then
+        isWorkDay = False
+    Else
+        isWorkDay = True
+    End If
+End Function
 
 
+Sub UpdateChargeInfo(line As Integer, task_level As Integer, is_parent As Boolean)
+    Dim findcell
+    Dim res_row As Integer
+    Dim month_col As Integer
+    Dim month_start As Integer
+    Dim month_end As Integer
+    
+    Set findcell = Worksheets("Resource").Columns("c").Find(Cells(line, g_task_res_col).Value, LookAt:=xlPart)
+    If Not findcell Is Nothing Then
+        res_row = findcell.Row
+    Else
+        Exit Sub
+    End If
+    
+    month_start = Month(Cells(line, g_task_start_day_col).Value)
+    month_end = Month(Cells(line, g_task_end_day_col).Value)
+    If month_start = month_end Then
+        If g_task_end_month > g_task_start_month Then
+            month_col = 4 + month_start - g_task_start_month
+        Else
+            If month_start < g_task_start_month Then
+                month_col = 4 + (12 + month_start - g_task_start_month)
+            Else
+                month_col = 4 + (month_start - g_task_start_month)
+            End If
+        End If
 
-
+        Worksheets("Resource").Cells(res_row, month_col).Value = _
+            Worksheets("Resource").Cells(res_row, month_col).Value + _
+            (Cells(line, g_task_days_col).Value * 8 * Cells(line, g_task_res_persent_col).Value)
+    Else
+    
+    End If
+    
+End Sub
 
 
 
