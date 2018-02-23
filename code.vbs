@@ -134,8 +134,8 @@ Sub getTaskArea()
     Dim line As Integer
     Dim col As Integer
 
-    g_task_start_month = Month(Cells(g_start_day_x, g_start_day_y).Value)
-    g_task_end_month = Month(DateAdd("m", g_task_day_len, Cells(g_start_day_x, g_start_day_y).Value))
+    g_task_start_month = month(Cells(g_start_day_x, g_start_day_y).Value)
+    g_task_end_month = month(DateAdd("m", g_task_day_len, Cells(g_start_day_x, g_start_day_y).Value))
     
     line = g_task_area_start_line
     Do While Cells(line, g_task_name_col).Value <> ""
@@ -404,8 +404,8 @@ End Sub
 
 Sub test()
 
-    g_task_start_month = Month(Cells(g_start_day_x, g_start_day_y).Value)
-    g_task_end_month = Month(DateAdd("m", g_task_day_len, Cells(g_start_day_x, g_start_day_y).Value))
+    g_task_start_month = month(Cells(g_start_day_x, g_start_day_y).Value)
+    g_task_end_month = month(DateAdd("m", g_task_day_len, Cells(g_start_day_x, g_start_day_y).Value))
     MsgBox g_task_start_month & "/" & g_task_end_month & "/" & DateAdd("m", g_task_day_len, Cells(g_start_day_x, g_start_day_y).Value)
     
 End Sub
@@ -529,7 +529,7 @@ Sub updateTaskInfo()
         
             Call updateParentTaskDate(line, task_level, False)
             Call updateParentTaskProcess(line, task_level, False)
-            Call UpdateChargeInfo(line, task_level, False)
+            Call UpdateResouceInfo(line, task_level)
             
         ElseIf Cells(line, g_task_type_col).Value = "P" Then
         
@@ -575,14 +575,46 @@ Function isWorkDay(cur_date As Date) As Boolean
     End If
 End Function
 
+Sub UpdateChargeInfo(line As Integer, res_row As Integer, month As Integer, days As Integer)
+    Dim month_col As Integer
 
-Sub UpdateChargeInfo(line As Integer, task_level As Integer, is_parent As Boolean)
+    '2017/9-2018/3
+    If g_task_end_month > g_task_start_month Then
+        month_col = 4 + month - g_task_start_month
+    Else
+        If month < g_task_start_month Then
+            month_col = 4 + (12 + month - g_task_start_month)
+        Else
+            month_col = 4 + (month - g_task_start_month)
+        End If
+    End If
+
+    Worksheets("Resource").Cells(res_row, month_col).Value = _
+        Worksheets("Resource").Cells(res_row, month_col).Value + _
+        (days * 8 * Cells(line, g_task_res_persent_col).Value)
+End Sub
+
+Sub UpdateResouceInfo(line As Integer, task_level As Integer)
     Dim findcell
     Dim res_row As Integer
     Dim month_col As Integer
     Dim month_start As Integer
     Dim month_end As Integer
+    Dim day_start As Integer
+    Dim day_end As Integer
+    Dim year_start As Integer
+    Dim year_end As Integer
+    Dim i As Integer
+    Dim work_days As Integer
+    Dim temp_date As Date
     
+    If IsError(Range("G" & line)) = True Then
+        Exit Sub
+    End If
+    If LTrim(Cells(line, g_task_res_col).Value) = "" Then
+        Exit Sub
+    End If
+
     Set findcell = Worksheets("Resource").Columns("c").Find(Cells(line, g_task_res_col).Value, LookAt:=xlPart)
     If Not findcell Is Nothing Then
         res_row = findcell.Row
@@ -590,28 +622,39 @@ Sub UpdateChargeInfo(line As Integer, task_level As Integer, is_parent As Boolea
         Exit Sub
     End If
     
-    month_start = Month(Cells(line, g_task_start_day_col).Value)
-    month_end = Month(Cells(line, g_task_end_day_col).Value)
+    month_start = month(Cells(line, g_task_start_day_col).Value)
+    month_end = month(Cells(line, g_task_end_day_col).Value)
     If month_start = month_end Then
-        If g_task_end_month > g_task_start_month Then
-            month_col = 4 + month_start - g_task_start_month
-        Else
-            If month_start < g_task_start_month Then
-                month_col = 4 + (12 + month_start - g_task_start_month)
-            Else
-                month_col = 4 + (month_start - g_task_start_month)
-            End If
-        End If
-
-        Worksheets("Resource").Cells(res_row, month_col).Value = _
-            Worksheets("Resource").Cells(res_row, month_col).Value + _
-            (Cells(line, g_task_days_col).Value * 8 * Cells(line, g_task_res_persent_col).Value)
+        Call UpdateChargeInfo(line, res_row, month_start, Cells(line, g_task_days_col).Value)
     Else
-    
+        year_start = Year(Cells(line, g_task_start_day_col).Value)
+        year_end = Year(Cells(line, g_task_end_day_col).Value)
+
+        day_start = day(Cells(line, g_task_start_day_col).Value)
+        day_end = day(Cells(line, g_task_end_day_col).Value)
+        
+        If day_start > day_end Then
+            temp_date = DateSerial(year_end, month_end, 1)
+            For i = 1 To day_end
+                If isWorkDay(temp_date) Then
+                    work_days = work_days + 1
+                End If
+                temp_date = temp_date + 1
+            Next
+            Call UpdateChargeInfo(line, res_row, month_end, work_days)
+            Call UpdateChargeInfo(line, res_row, month_start, Cells(line, g_task_days_col).Value - work_days)
+        Else
+            temp_date = DateSerial(year_start, month_start, 1)
+            For i = 1 To day_start
+                If isWorkDay(temp_date) Then
+                    work_days = work_days + 1
+                End If
+                temp_date = temp_date + 1
+            Next
+            Call UpdateChargeInfo(line, res_row, month_start, work_days)
+            Call UpdateChargeInfo(line, res_row, month_end, Cells(line, g_task_days_col).Value - work_days)
+        End If
     End If
     
 End Sub
-
-
-
 
