@@ -64,5 +64,6 @@
 <icon BUILTIN="button_ok"/>
 </node>
 </node>
+<node CREATED="1519368291566" ID="ID_766396390" MODIFIED="1519368300084" POSITION="left" TEXT="Readme&#x6587;&#x4ef6;&#x66f4;&#x65b0;"/>
 </node>
 </map>
